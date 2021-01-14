@@ -20,7 +20,12 @@
 --     This script uses only the AWR's DBA_HIST_ACTIVE_SESS_HISTORY, use
 --     @dashtop.sql for accessiong the V$ ASH view
 --              
+--
+-- TODO:
+--     Deal with cases where there's no AWR snapshot saved to DBA_HIST_SNAPSHOTS
+--     (due to a DB issue) but DBA_HIST_ASH samples are there
 --------------------------------------------------------------------------------
+
 COL "%This" FOR A7
 --COL p1     FOR 99999999999999
 --COL p2     FOR 99999999999999
@@ -35,7 +40,7 @@ COL AAS         FOR 9999.9
 COL totalseconds HEAD "Total|Seconds" FOR 99999999
 COL dist_sqlexec_seen HEAD "Distinct|Execs Seen"
 COL event       FOR A42 WORD_WRAP
-COL event2      FOR A42 WORD_WRAP
+COL event2      FOR A46 WORD_WRAP
 COL time_model_name FOR A50 WORD_WRAP
 COL program2    FOR A40 TRUNCATE
 COL username    FOR A20 wrap
@@ -78,7 +83,7 @@ SELECT * FROM (
                 CASE 
                     WHEN event like 'enq%' AND session_state = 'WAITING'
                     THEN ' [mode='||BITAND(p1, POWER(2,14)-1)||']'
-                    WHEN a.event IN ('buffer busy waits', 'gc buffer busy', 'gc buffer busy acquire', 'gc buffer busy release')
+                    WHEN a.event IN (SELECT name FROM v$event_name WHERE parameter3 = 'class#') 
                     THEN ' ['||CASE WHEN a.p3 <= (SELECT MAX(r) FROM bclass) 
                                THEN (SELECT class FROM bclass WHERE r = a.p3)
                                ELSE (SELECT DECODE(MOD(BITAND(a.p3,TO_NUMBER('FFFF','XXXX')) - 17,2),0,'undo header',1,'undo data', 'error') FROM dual)
@@ -115,12 +120,20 @@ SELECT * FROM (
            ||CASE WHEN BITAND(time_model, POWER(2, 23)) = POWER(2, 23) THEN 'TABLESPACE_ENCRYPTION ' END time_model_name
         FROM dba_hist_active_sess_history a) a
       , dba_users u
+      , (SELECT
+             object_id,data_object_id,owner,object_name,subobject_name,object_type
+           , owner||'.'||object_name obj
+           , owner||'.'||object_name||' ['||object_type||']' objt
+         FROM dba_objects) o
     WHERE
         a.user_id = u.user_id (+)
+    AND a.current_obj# = o.object_id(+)
     AND &2
-    AND sample_time BETWEEN &3 AND &4
-    AND dbid = (SELECT dbid FROM v$database)
+    AND a.sample_time BETWEEN &3 AND &4
+    AND a.dbid = (SELECT d.dbid FROM v$database d) -- for partition pruning
+    --AND a.snap_id IN (SELECT sn.snap_id FROM dba_hist_snapshot sn WHERE sn.begin_interval_time >= &3 AND sn.end_interval_time <= &4) -- for partition pruning
     AND snap_id IN (SELECT snap_id FROM dba_hist_snapshot WHERE sample_time BETWEEN &3 AND &4) -- for partition pruning
+    --AND (a.dbid, a.snap_id) IN (SELECT d.dbid, sn.snap_id FROM v$database d, dba_hist_snapshot sn WHERE d.dbid = sn.dbid AND sn.begin_interval_time >= &3 AND sn.end_interval_time <= &4) -- for partition pruning
     GROUP BY
         &1
     ORDER BY

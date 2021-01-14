@@ -3,7 +3,7 @@
 
 ------------------------------------------------------------------------------------------------------------------------
 --
--- File name:   dasqlmon.sql (v1.1)
+-- File name:   dasqlmon.sql (v1.2)
 --
 -- Purpose:     Report SQL-monitoring-style drill-down into where in an execution plan the execution time is spent
 --
@@ -17,7 +17,7 @@
 -- Usage:       @dasqlmon <sqlid> <plan_hash_value> <from_time> <to_time>
 --
 -- Notes:       This script runs on Oracle 11g+ and you should have the
---              Diagnostics and Tuning pack licenses for using it as it queries
+--              Diagnostics license for using it as it queries
 --              some separately licensed views.
 --
 ------------------------------------------------------------------------------------------------------------------------
@@ -25,11 +25,12 @@ SET LINESIZE 999 PAGESIZE 5000 TRIMOUT ON TRIMSPOOL ON
 
 COL asqlmon_operation  HEAD Plan_Operation FOR a70
 COL asqlmon_predicates HEAD PREDICATES     FOR a100 word_wrap
+COL obj_alias_qbc_name FOR a40
 COL options   FOR a30
 
 COL asqlmon_plan_hash_value HEAD PLAN_HASH_VALUE
 COL asqlmon_sql_id          HEAD SQL_ID  NOPRINT
-COL asqlmon_sql_child       HEAD CHILD#  NOPRINT
+COL asqlmon_sql_child       HEAD "CHILD"  PRINT
 COL asqlmon_sample_time     HEAD SAMPLE_HOUR
 COL projection FOR A520
 
@@ -39,8 +40,7 @@ COL pct_child_vis HEAD "Visual" FOR A12
 COL asqlmon_id        HEAD "ID" FOR 9999
 COL asqlmon_parent_id HEAD "PID"  FOR 9999
 
-
-BREAK ON asqlmon_plan_hash_value SKIP 1 ON asqlmon_sql_id SKIP 1 ON asqlmon_sql_child SKIP 1 ON asqlmon_sample_time SKIP 1 DUP ON asqlmon_operation
+BREAK ON asqlmon_sql_id SKIP 1 ON asqlmon_sql_child SKIP 1 ON asqlmon_plan_hash_value SKIP 1 ON asqlmon_sample_time SKIP 1 DUP ON asqlmon_operation
 
 PROMPT
 PROMPT -- ASQLMon v1.1 - by Tanel Poder ( http://blog.tanelpoder.com ) - Display SQL execution plan line level activity breakdown from ASH
